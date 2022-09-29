@@ -1,0 +1,7 @@
+mwparserfromhell==0.6.4
+openpyxl==3.0.10
+pywikibot==7.5.0
+pyxlsb==1.0.9
+regex==2022.7.25
+wikitextparser==0.49.4
+xlrd==2.0.1
