@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+## This one does a search for further reading and counts
+## how often the DOI appears.
+## Also reports if a non Cite JIPA template is used
+
 import sys
 import pywikibot as pwb
 from pywikibot import pagegenerators
@@ -115,16 +120,18 @@ def checkForDOI(section, doi):
     # returns True if doi is already in a citation
     # template in the section
     doi = doi.strip()
+    doicount = 0
     for tmpl in section.filter_templates():
         if tmpl.has("doi"):
             thisdoi = str(tmpl.get("doi").value).strip()
             if thisdoi == doi:
+                doicount += 1
                 print("DOI found")
                 if not tmpl.name.matches("Cite JIPA"):
                     print(tmpl.name)
                     print("Not using cite jipa")
-                return True
-    return False
+                
+    return doicount
 
 def appendCitation(section, citation):
     """
@@ -191,31 +198,18 @@ def mkCiteJIPA(df):
         jipa_tmpl.add("volume", int(df["volume"]))
     if not pd.isnull(df["issue"]):
         jipa_tmpl.add("issue", int(df["issue"]))
-
-    # this is needed to figure out whether the
-    # article is online or in print
-    # firstpage == 1 means online    
-    firstpage = int(df["pages"].split("-")[0])
-    
+        
     pp = re.sub("-+", '&ndash;', df["pages"])
-    
     jipa_tmpl.add("pages", pp)
     jipa_tmpl.add("doi", df["doi"])
-    if firstpage == 1:
-        jipa_tmpl.add("onlinedate", dt)
-    else:
-        jipa_tmpl.add("printdate", dt)
+    jipa_tmpl.add("printdate", dt)
     if pd.isnull(df["SoundFiles"]):
-        soundfiles = "yes"
+        soundfiles = "no"
     else:
         soundfiles = df["SoundFiles"]
-        soundfiles = str(soundfiles).strip().lower()
-        if soundfiles != "no":
-            soundfiles = "yes"
     jipa_tmpl.add("soundfiles", soundfiles)
 
     return jipa_tmpl
-
 
 def mkFurtherReading(citation):
     """
@@ -256,8 +250,8 @@ def checkPage(details, page):
     # Now find further reading
     allsections = mwph.parse(page.text)
     have_furtherreading = False
-    insertedFR = False
-
+    hasFR = False
+    doicount = 0
     for sect in allsections.get_sections():
         for f in sect.filter_headings():
             # can't find good definition of what matches does
@@ -265,53 +259,16 @@ def checkPage(details, page):
                 print("Found further reading")
                 have_furtherreading = True
                 # can check for DOI in this section
-                if not checkForDOI(sect, doi):
-                    # add the citation
-                    appendCitation(sect, thiscite)
-                    insertedFR = True
+                doicount = checkForDOI(sect, doi)
+                hasFR = True
                     #print(sect.nodes)
                 break
-    if not have_furtherreading:
-        # need to create and insert our own
-        # ==See also==
-        # ==Notes== and ==References==
-        # ==Further reading==
-        # ==External links==
-        #
-        # search for External links and place further reading before,
-        # search for References in External links doesn't exist
-        # and place after, and continue
-        FurtherReading = mkFurtherReading(thiscite)
-
-        # this can sometimes match stuff like "other ordering preferences"
-        el = findSection(allsections, "External Links")
-        refs = findSection(allsections, "References")
-        notes = findSection(allsections, "Notes")
-        seealso = findSection(allsections, "See also")
-        if el is not None:
-            print("Using external links")
-            allsections.insert_before(el, FurtherReading)
-            insertedFR = True
-        elif refs is not None:
-            print("Using references")
-            #print(refs)
-            allsections.insert_before(refs, FurtherReading)
-            insertedFR = True
-        elif notes is not None:
-            print("Using notes")
-            allsections.insert_before(notes, FurtherReading)
-            insertedFR = True
-        elif seealso is not None:
-            print("Using external see also")
-            allsections.insert_before(seealso, FurtherReading)
-            insertedFR = True
-        # check whether we were successful
-        if not insertedFR:
-            print("Can't figure out where to insert Further Reading")
-    if insertedFR:
-        return str(allsections)
+    if not hasFR:
+        print("No further reading section")
     else:
-        return None
+        if doicount != 1:
+            print("DOI appears " + str(doicount))
+    
 
 class BudgieBot(ExistingPageBot, SingleSiteBot):
     
@@ -326,22 +283,8 @@ class BudgieBot(ExistingPageBot, SingleSiteBot):
         """Load the given page, do some changes, and save it."""
         #print(self.current_page)
         #print(self.current_page.__isodf__)
-        breakpoint()
-        text = checkPage(self.current_page.__isodf__, self.current_page)
-        if text is not None:
-            # modifications made
-            print("Mods made - update")
-            if self.opt.dryrun:
-                # only show the diffs
-                pwb.showDiff(self.current_page.text, text)
-            elif self.opt.interactive:
-                pwb.showDiff(self.current_page.text, text)
-                submit = pwb.input_yn('Do you want to submit the changes above?', default=False)
-                if submit:
-                    print("Submitting changes") 
-                    self.put_current(text, summary=self.opt.summary)
-            else:
-                self.put_current(text, summary=self.opt.summary)        
+        checkPage(self.current_page.__isodf__, self.current_page)
+            
 
 # boilerplate main from https://doc.wikimedia.org/pywikibot/stable/library_usage.html
 def main(*args: str) -> None:
