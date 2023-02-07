@@ -326,7 +326,6 @@ class BudgieBot(ExistingPageBot, SingleSiteBot):
         """Load the given page, do some changes, and save it."""
         #print(self.current_page)
         #print(self.current_page.__isodf__)
-        breakpoint()
         text = checkPage(self.current_page.__isodf__, self.current_page)
         if text is not None:
             # modifications made
