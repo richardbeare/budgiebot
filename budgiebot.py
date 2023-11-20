@@ -216,6 +216,59 @@ def mkCiteJIPA(df):
 
     return jipa_tmpl
 
+def mkCiteJIPA2(df):
+    """
+    df is a single row dataframe
+    https://en.wikipedia.org/wiki/Template:Cite_JIPA
+    {cite JIPA |author= |title= |printdate= |volume= |issue= |pages= |doi= }
+    
+    This version allows better author fields, with first1 last1, first2, last2
+    Looks like dates should by yyyy-mm-dd, with -dd optional
+    """
+    def addAuthorField(JTpl, text, fieldname="first"):
+      textlist = text.split(';')
+      for idx, val in enumerate(textlist):
+        fname=fieldname + str(idx+1)
+        JTpl.add(fname, val)
+      return JTpl
+    
+    # format the date
+    dt = df["DA"]
+    dt=re.sub("/+","-", dt)
+    dt=re.sub('-$', '', dt)
+    jipa_tmpl = mwph.nodes.Template(name='Cite JIPA')
+    #jipa_tmpl.add("author", df["author"])
+    jipa_tmpl = addAuthorField(jipa_tmpl, df['author_given'], 'first')
+    jipa_tmpl = addAuthorField(jipa_tmpl, df['author_family'], 'last')
+    jipa_tmpl.add("title", df["title"])
+    if not pd.isnull(df["volume"]):
+        jipa_tmpl.add("volume", int(df["volume"]))
+    if not pd.isnull(df["issue"]):
+        jipa_tmpl.add("issue", int(df["issue"]))
+
+    # this is needed to figure out whether the
+    # article is online or in print
+    # firstpage == 1 means online    
+    firstpage = int(df["pages"].split("-")[0])
+    
+    pp = re.sub("-+", '&ndash;', df["pages"])
+    
+    jipa_tmpl.add("pages", pp)
+    jipa_tmpl.add("doi", df["doi"])
+    if firstpage == 1:
+        jipa_tmpl.add("onlinedate", dt)
+    else:
+        jipa_tmpl.add("printdate", dt)
+    if pd.isnull(df["SoundFiles"]):
+        soundfiles = "yes"
+    else:
+        soundfiles = df["SoundFiles"]
+        soundfiles = str(soundfiles).strip().lower()
+        if soundfiles != "no":
+            soundfiles = "yes"
+    jipa_tmpl.add("soundfiles", soundfiles)
+
+    return jipa_tmpl
 
 def mkFurtherReading(citation):
     """
@@ -252,11 +305,16 @@ def checkPage(details, page):
         return(None)
     
     # get the citation ready
-    thiscite = mkCiteJIPA(details)
+    thiscite = mkCiteJIPA2(details)
     # Now find further reading
     allsections = mwph.parse(page.text)
     have_furtherreading = False
     insertedFR = False
+
+    for sect in allsections.get_sections():
+        if checkForDOI(sect, doi):
+            print("found citation in " + str(sect.filter_headings()[0]))
+            return None
 
     for sect in allsections.get_sections():
         for f in sect.filter_headings():
@@ -271,6 +329,7 @@ def checkPage(details, page):
                     insertedFR = True
                     #print(sect.nodes)
                 break
+
     if not have_furtherreading:
         # need to create and insert our own
         # ==See also==

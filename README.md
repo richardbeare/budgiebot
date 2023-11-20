@@ -68,3 +68,15 @@ submitting changes.
 
 The `-interactive` option will display the diffs in text form and prompt the user as to
 whether the changes should be submitted.
+
+# New articles
+
+Procedure is to drop the DOIs into zotero (magic wand icon) and create a new 
+citation set. Export it as `csl json`, then use `import_new_pubs.R` to create the
+excel file. Edit the excel file to include the ISO codes.
+
+Pass that excel file to budgiebot, as above.
+
+** NOTE - I have updated the bot to deal with author lists in a nicer way,
+but this bit is not tested. Make sure to check the results next time **
+
